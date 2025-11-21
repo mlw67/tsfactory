@@ -114,8 +114,8 @@ class TestDataProcessor:
         
         image = processor.to_image(data, period=12)
         
-        # 应该有5行，每行12个元素
-        assert image.shape == (5, 12)
+        # 应该有5行，每行12个元素，1个通道（统一3D格式）
+        assert image.shape == (5, 12, 1)
         # 检查归一化
         assert np.min(image) >= 0
         assert np.max(image) <= 1
@@ -137,7 +137,7 @@ class TestDataProcessor:
         
         image = processor.to_image(data, period=12, norm_min=0, norm_max=100)
         
-        assert image.shape == (5, 12)
+        assert image.shape == (5, 12, 1)
         # 所有值应该在0-1之间（因为数据范围是0-59，归一化范围是0-100）
         assert np.all(image >= 0)
         assert np.all(image <= 1)
@@ -151,9 +151,10 @@ class TestDataProcessor:
         processor = DataProcessor()
         image = processor.to_image(data, period=None, auto_detect_period=True)
         
-        # 图像应该成功创建
-        assert image.ndim == 2
+        # 图像应该成功创建，统一为3D格式
+        assert image.ndim == 3
         assert image.shape[0] > 0
+        assert image.shape[2] == 1  # 单通道时n_features=1
     
     def test_from_image_1d(self):
         """测试从图像转回一维数据"""
@@ -204,8 +205,8 @@ class TestDataProcessor:
         
         image = processor.to_image(data, period=12)
         
-        # 应该创建单行图像
-        assert image.shape == (1, 5)
+        # 应该创建单行图像，统一3D格式
+        assert image.shape == (1, 5, 1)
 
 
 if __name__ == "__main__":

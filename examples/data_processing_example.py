@@ -97,7 +97,7 @@ def main():
     
     print(f"单维数据转图像:")
     print(f"  输入数据形状: {data_1d.shape}")
-    print(f"  输出图像形状: {image_1d.shape} (5行 × 12列)")
+    print(f"  输出图像形状: {image_1d.shape} (5行 × 12列 × 1通道)")
     print(f"  图像值范围: [{np.min(image_1d):.4f}, {np.max(image_1d):.4f}]")
     
     # 多维度数据转图像（多通道）

@@ -271,7 +271,7 @@ class DataProcessor:
         Returns:
         --------
         image : np.ndarray
-            图像数据，shape为(n_rows, period)或(n_rows, period, n_features)
+            图像数据，统一为shape (n_rows, period, n_features)，单通道时n_features=1
         """
         # 确保数据是2D的
         if data.ndim == 1:
@@ -304,21 +304,14 @@ class DataProcessor:
         
         if n_rows == 0:
             # 如果数据长度小于周期，将整个数据作为一行
-            if n_features == 1:
-                return normalized_data[:, 0].reshape(1, -1)
-            else:
-                return normalized_data.reshape(1, n_samples, n_features)
+            return normalized_data.reshape(1, n_samples, n_features)
         
         # 截取数据以匹配完整周期
         data_truncated = normalized_data[:n_rows * period]
         
         # 重塑为图像
-        if n_features == 1:
-            # 单特征：返回(n_rows, period)
-            image = data_truncated[:, 0].reshape(n_rows, period)
-        else:
-            # 多特征：返回(n_rows, period, n_features)
-            image = data_truncated.reshape(n_rows, period, n_features)
+        # 统一返回(n_rows, period, n_features)格式
+        image = data_truncated.reshape(n_rows, period, n_features)
         
         return image
     
@@ -334,7 +327,7 @@ class DataProcessor:
         Parameters:
         -----------
         image : np.ndarray
-            图像数据，shape为(n_rows, period)或(n_rows, period, n_features)
+            图像数据，统一为shape (n_rows, period, n_features)
         norm_min : float
             反归一化最小值
         norm_max : float
@@ -346,15 +339,26 @@ class DataProcessor:
             时序数据，shape为(n_samples,)或(n_samples, n_features)
         """
         if image.ndim == 2:
-            # 单特征图像
+            # 兼容旧格式的单特征图像
+            import warnings
+            warnings.warn(
+                "2D image format is deprecated. Please use 3D format with shape (n_rows, period, n_features).",
+                DeprecationWarning,
+                stacklevel=2
+            )
             data = image.flatten()
             # 反归一化
             data = data * (norm_max - norm_min) + norm_min
             return data
         else:
-            # 多特征图像
+            # 标准的3D图像格式
             n_rows, period, n_features = image.shape
             data = image.reshape(-1, n_features)
             # 反归一化
             data = data * (norm_max - norm_min) + norm_min
-            return data
+            
+            # 如果是单特征，返回1D数组
+            if n_features == 1:
+                return data.flatten()
+            else:
+                return data

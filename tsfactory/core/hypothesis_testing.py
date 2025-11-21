@@ -84,8 +84,14 @@ class HypothesisTester:
             '10%': -2.57
         }
         
-        # p值近似
-        p_value = 0.05 if t_stat > critical_values['5%'] else 0.01
+        # p值近似 (简化实现，实际应使用查表法或更精确的计算)
+        # 注意：这是简化版本，生产环境应使用statsmodels等库
+        if t_stat < critical_values['1%']:
+            p_value = 0.01
+        elif t_stat < critical_values['5%']:
+            p_value = 0.05
+        else:
+            p_value = 0.10
         
         return {
             'test_statistic': t_stat,
@@ -125,7 +131,14 @@ class HypothesisTester:
             '10%': 0.119
         }
         
-        p_value = 0.05 if kpss_stat > critical_values['5%'] else 0.1
+        # p值近似 (简化实现，实际应使用查表法或更精确的计算)
+        # 注意：这是简化版本，生产环境应使用statsmodels等库
+        if kpss_stat > critical_values['1%']:
+            p_value = 0.01
+        elif kpss_stat > critical_values['5%']:
+            p_value = 0.05
+        else:
+            p_value = 0.10
         
         return {
             'test_statistic': kpss_stat,

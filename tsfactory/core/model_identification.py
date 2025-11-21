@@ -68,7 +68,7 @@ class ModelIdentifier:
                     ic = self._calculate_bic(rss, len(y), p)
                 
                 ic_values.append(ic)
-            except:
+            except (np.linalg.LinAlgError, ValueError):
                 ic_values.append(np.inf)
         
         if not ic_values:

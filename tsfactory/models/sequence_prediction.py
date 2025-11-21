@@ -141,7 +141,6 @@ class SequencePredictor:
         # 添加截距项
         X_with_intercept = np.column_stack([np.ones(len(X)), X])
         self.coef_ = np.linalg.lstsq(X_with_intercept, y, rcond=None)[0]
-        self.has_intercept = True
     
     def _fit_polynomial(self, X: np.ndarray, y: np.ndarray, degree: int):
         """拟合多项式回归模型"""

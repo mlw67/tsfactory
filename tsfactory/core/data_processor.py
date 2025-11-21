@@ -271,7 +271,7 @@ class DataProcessor:
         Returns:
         --------
         image : np.ndarray
-            图像数据，shape为(n_rows, period, 2)（单特征，第二通道为1）或(n_rows, period, n_features)（多特征）
+            图像数据，shape为(n_rows, period)或(n_rows, period, n_features)
         """
         # 确保数据是2D的
         if data.ndim == 1:
@@ -305,10 +305,7 @@ class DataProcessor:
         if n_rows == 0:
             # 如果数据长度小于周期，将整个数据作为一行
             if n_features == 1:
-                image = normalized_data[:, 0].reshape(1, -1)
-                # 添加第二个通道，数值为1
-                ones_channel = np.ones((1, n_samples))
-                return np.stack([image, ones_channel], axis=-1)
+                return normalized_data[:, 0].reshape(1, -1)
             else:
                 return normalized_data.reshape(1, n_samples, n_features)
         
@@ -317,11 +314,8 @@ class DataProcessor:
         
         # 重塑为图像
         if n_features == 1:
-            # 单特征：返回(n_rows, period, 2)，第二个通道值为1
+            # 单特征：返回(n_rows, period)
             image = data_truncated[:, 0].reshape(n_rows, period)
-            # 添加第二个通道，数值为1
-            ones_channel = np.ones((n_rows, period))
-            image = np.stack([image, ones_channel], axis=-1)
         else:
             # 多特征：返回(n_rows, period, n_features)
             image = data_truncated.reshape(n_rows, period, n_features)
@@ -340,7 +334,7 @@ class DataProcessor:
         Parameters:
         -----------
         image : np.ndarray
-            图像数据，shape为(n_rows, period, 2)（单特征）或(n_rows, period, n_features)（多特征）
+            图像数据，shape为(n_rows, period)或(n_rows, period, n_features)
         norm_min : float
             反归一化最小值
         norm_max : float
@@ -352,14 +346,7 @@ class DataProcessor:
             时序数据，shape为(n_samples,)或(n_samples, n_features)
         """
         if image.ndim == 2:
-            # 旧版本的单特征图像（已弃用）
-            import warnings
-            warnings.warn(
-                "Support for 2D single-channel images is deprecated. "
-                "Please regenerate images using the current version which produces 3D arrays with shape (n_rows, period, 2).",
-                DeprecationWarning,
-                stacklevel=2
-            )
+            # 单特征图像
             data = image.flatten()
             # 反归一化
             data = data * (norm_max - norm_min) + norm_min
@@ -367,22 +354,6 @@ class DataProcessor:
         else:
             # 多特征图像
             n_rows, period, n_features = image.shape
-            
-            # 检查是否是单特征图像（有2个通道，第二个通道全为1）
-            # 使用快速检查：只检查第二通道的第一个和最后一个值，以及平均值
-            if n_features == 2:
-                second_channel = image[:, :, 1]
-                # 快速检查：检查最小值、最大值和平均值是否都接近1
-                if (abs(second_channel.min() - 1.0) < 1e-6 and 
-                    abs(second_channel.max() - 1.0) < 1e-6 and 
-                    abs(second_channel.mean() - 1.0) < 1e-6):
-                    # 单特征图像，只使用第一个通道
-                    data = image[:, :, 0].flatten()
-                    # 反归一化
-                    data = data * (norm_max - norm_min) + norm_min
-                    return data
-            
-            # 真正的多特征图像
             data = image.reshape(-1, n_features)
             # 反归一化
             data = data * (norm_max - norm_min) + norm_min

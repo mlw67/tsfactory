@@ -114,13 +114,11 @@ class TestDataProcessor:
         
         image = processor.to_image(data, period=12)
         
-        # 应该有5行，每行12个元素，2个通道（第二通道为1）
-        assert image.shape == (5, 12, 2)
-        # 检查第一通道的归一化
-        assert np.min(image[:, :, 0]) >= 0
-        assert np.max(image[:, :, 0]) <= 1
-        # 检查第二通道全为1
-        assert np.allclose(image[:, :, 1], 1.0)
+        # 应该有5行，每行12个元素
+        assert image.shape == (5, 12)
+        # 检查归一化
+        assert np.min(image) >= 0
+        assert np.max(image) <= 1
     
     def test_to_image_2d(self):
         """测试多维数据转图像"""
@@ -139,12 +137,10 @@ class TestDataProcessor:
         
         image = processor.to_image(data, period=12, norm_min=0, norm_max=100)
         
-        assert image.shape == (5, 12, 2)
-        # 第一通道的所有值应该在0-1之间（因为数据范围是0-59，归一化范围是0-100）
-        assert np.all(image[:, :, 0] >= 0)
-        assert np.all(image[:, :, 0] <= 1)
-        # 第二通道全为1
-        assert np.allclose(image[:, :, 1], 1.0)
+        assert image.shape == (5, 12)
+        # 所有值应该在0-1之间（因为数据范围是0-59，归一化范围是0-100）
+        assert np.all(image >= 0)
+        assert np.all(image <= 1)
     
     def test_to_image_auto_detect_period(self):
         """测试自动检测周期"""
@@ -155,11 +151,9 @@ class TestDataProcessor:
         processor = DataProcessor()
         image = processor.to_image(data, period=None, auto_detect_period=True)
         
-        # 图像应该成功创建，单通道数据应该有3维（包含第二通道）
-        assert image.ndim == 3
+        # 图像应该成功创建
+        assert image.ndim == 2
         assert image.shape[0] > 0
-        assert image.shape[2] == 2  # 两个通道
-        assert np.allclose(image[:, :, 1], 1.0)  # 第二通道全为1
     
     def test_from_image_1d(self):
         """测试从图像转回一维数据"""
@@ -210,25 +204,8 @@ class TestDataProcessor:
         
         image = processor.to_image(data, period=12)
         
-        # 应该创建单行图像，包含2个通道
-        assert image.shape == (1, 5, 2)
-        assert np.allclose(image[:, :, 1], 1.0)  # 第二通道全为1
-    
-    def test_single_channel_has_second_channel_as_ones(self):
-        """测试单通道图像添加第二通道为1的功能"""
-        data = np.random.randn(100)
-        processor = DataProcessor()
-        
-        image = processor.to_image(data, period=20)
-        
-        # 应该有3个维度
-        assert image.ndim == 3
-        # 应该有2个通道
-        assert image.shape[2] == 2
-        # 第二通道应该全为1
-        assert np.allclose(image[:, :, 1], 1.0)
-        # 第一通道应该是归一化后的数据
-        assert image.shape == (5, 20, 2)
+        # 应该创建单行图像
+        assert image.shape == (1, 5)
 
 
 if __name__ == "__main__":

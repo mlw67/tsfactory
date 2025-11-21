@@ -17,6 +17,9 @@ class DataProcessor:
     提供数据滤波、分解、转换等功能
     """
     
+    # 常量定义
+    EPSILON = 1e-10  # 用于避免除零的小常数
+    
     def __init__(self):
         pass
     
@@ -160,7 +163,7 @@ class DataProcessor:
         if method == 'additive':
             detrended = data - trend
         else:  # multiplicative
-            detrended = data / (trend + 1e-10)
+            detrended = data / (trend + self.EPSILON)
         
         # 计算季节成分
         seasonal = self._extract_seasonal(detrended, period)
@@ -169,7 +172,7 @@ class DataProcessor:
         if method == 'additive':
             residual = data - trend - seasonal
         else:  # multiplicative
-            residual = data / ((trend + 1e-10) * (seasonal + 1e-10))
+            residual = data / ((trend + self.EPSILON) * (seasonal + self.EPSILON))
         
         return {
             'trend': trend,
@@ -195,7 +198,7 @@ class DataProcessor:
         
         # 寻找第一个显著的峰值
         peaks = []
-        for lag in range(2, min(max_period, len(autocorr))):
+        for lag in range(2, min(max_period, len(autocorr) - 1)):
             if autocorr[lag] > autocorr[lag - 1] and autocorr[lag] > autocorr[lag + 1]:
                 if autocorr[lag] > 0.3:  # 阈值
                     peaks.append((lag, autocorr[lag]))
@@ -283,7 +286,7 @@ class DataProcessor:
             norm_max = np.max(data)
         
         # 避免除以零
-        if norm_max - norm_min < 1e-10:
+        if norm_max - norm_min < self.EPSILON:
             normalized_data = np.zeros_like(data)
         else:
             normalized_data = (data - norm_min) / (norm_max - norm_min)

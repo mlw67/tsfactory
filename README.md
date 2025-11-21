@@ -11,6 +11,7 @@ TSFactory is a comprehensive time series analysis framework that includes variou
 ## 主要特性 / Key Features
 
 - **数据加载 / Data Loading**: 支持从多种数据源加载时序数据
+- **数据处理 / Data Processing**: 数据滤波、时序分解、时序转图像
 - **统计分析 / Statistical Analysis**: 描述性统计、自相关分析、趋势分析、季节性分析
 - **假设检验 / Hypothesis Testing**: 平稳性检验、正态性检验、相关性检验、白噪声检验
 - **模型辨识 / Model Identification**: ARIMA模型阶数识别
@@ -50,7 +51,31 @@ loader.load_from_array(data)
 loader.load_from_csv('data.csv', timestamp_col='date')
 ```
 
-### 2. 统计分析 / Statistical Analysis
+### 2. 数据处理 / Data Processing
+
+```python
+from tsfactory import DataProcessor
+
+processor = DataProcessor()
+
+# 数据滤波
+filtered = processor.filter(data, method='moving_average', window_size=5)
+filtered = processor.filter(data, method='savgol', window_size=11, polyorder=2)
+
+# 时序分解
+components = processor.decompose(data, method='additive', period=12)
+trend = components['trend']
+seasonal = components['seasonal']
+residual = components['residual']
+
+# 时序转图像 (每个周期为一行，多特征为多通道)
+image = processor.to_image(data, period=24)  # shape: (n_rows, 24) or (n_rows, 24, n_features)
+
+# 图像转回时序
+recovered = processor.from_image(image, norm_min=0, norm_max=1)
+```
+
+### 3. 统计分析 / Statistical Analysis
 
 ```python
 from tsfactory import StatisticalAnalyzer
@@ -68,7 +93,7 @@ acf = analyzer.autocorrelation(data, max_lag=20)
 trend = analyzer.trend_analysis(data)
 ```
 
-### 3. 假设检验 / Hypothesis Testing
+### 4. 假设检验 / Hypothesis Testing
 
 ```python
 from tsfactory import HypothesisTester
@@ -84,7 +109,7 @@ result = tester.normality_test(data)
 print(f"Is normal: {result['is_normal']}")
 ```
 
-### 4. 模型辨识 / Model Identification
+### 5. 模型辨识 / Model Identification
 
 ```python
 from tsfactory import ModelIdentifier
@@ -96,7 +121,7 @@ result = identifier.identify_arima_order(data, max_p=5, max_d=2, max_q=5)
 print(f"Optimal ARIMA order: {result['order']}")
 ```
 
-### 5. 缺失值填充 / Missing Value Imputation
+### 6. 缺失值填充 / Missing Value Imputation
 
 ```python
 from tsfactory import MissingValueImputer
@@ -110,7 +135,7 @@ imputer = MissingValueImputer(method='linear')
 filled_data = imputer.fit_transform(data_with_missing)
 ```
 
-### 6. 异常检测 / Anomaly Detection
+### 7. 异常检测 / Anomaly Detection
 
 ```python
 from tsfactory import AnomalyDetector
@@ -124,7 +149,7 @@ stats = detector.anomaly_statistics(data)
 print(f"Total anomalies: {stats['total_anomalies']}")
 ```
 
-### 7. 序列预测 / Sequence Prediction
+### 8. 序列预测 / Sequence Prediction
 
 ```python
 from tsfactory import SequencePredictor

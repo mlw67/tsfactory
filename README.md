@@ -68,8 +68,8 @@ trend = components['trend']
 seasonal = components['seasonal']
 residual = components['residual']
 
-# 时序转图像 (每个周期为一行，多特征为多通道)
-image = processor.to_image(data, period=24)  # shape: (n_rows, 24) or (n_rows, 24, n_features)
+# 时序转图像 (每个周期为一行，单特征为2通道，多特征为多通道)
+image = processor.to_image(data, period=24)  # shape: (n_rows, 24, 2) for single feature or (n_rows, 24, n_features) for multiple features
 
 # 图像转回时序
 recovered = processor.from_image(image, norm_min=0, norm_max=1)

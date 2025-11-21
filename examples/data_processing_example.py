@@ -97,8 +97,9 @@ def main():
     
     print(f"单维数据转图像:")
     print(f"  输入数据形状: {data_1d.shape}")
-    print(f"  输出图像形状: {image_1d.shape} (5行 × 12列)")
-    print(f"  图像值范围: [{np.min(image_1d):.4f}, {np.max(image_1d):.4f}]")
+    print(f"  输出图像形状: {image_1d.shape} (5行 × 12列 × 2通道)")
+    print(f"  第一通道值范围: [{np.min(image_1d[:,:,0]):.4f}, {np.max(image_1d[:,:,0]):.4f}]")
+    print(f"  第二通道值范围: [{np.min(image_1d[:,:,1]):.4f}, {np.max(image_1d[:,:,1]):.4f}] (固定为1)")
     
     # 多维度数据转图像（多通道）
     data_2d = np.random.randn(60, 3) * 10 + 50
@@ -119,7 +120,7 @@ def main():
     print(f"\n自定义归一化范围:")
     print(f"  归一化范围: [0, 100]")
     print(f"  图像形状: {image_custom_norm.shape}")
-    print(f"  图像值范围: [{np.min(image_custom_norm):.4f}, {np.max(image_custom_norm):.4f}]")
+    print(f"  第一通道值范围: [{np.min(image_custom_norm[:,:,0]):.4f}, {np.max(image_custom_norm[:,:,0]):.4f}]")
     
     # 自动检测周期
     periodic_signal = 10 * np.sin(2 * np.pi * np.arange(100) / 12)
@@ -132,6 +133,7 @@ def main():
     print(f"  输入数据长度: {len(periodic_signal)}")
     print(f"  输出图像形状: {image_auto_period.shape}")
     print(f"  检测到的周期（约）: {image_auto_period.shape[1]}")
+    print(f"  通道数: {image_auto_period.shape[2]} (单通道数据，第二通道为1)")
     
     # 4. 图像转回时序数据 - Image to Time Series
     print("\n4. Image to Time Series Conversion - 图像转回时序数据")

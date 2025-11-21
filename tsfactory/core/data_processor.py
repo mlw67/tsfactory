@@ -353,6 +353,13 @@ class DataProcessor:
         """
         if image.ndim == 2:
             # 旧版本的单特征图像（已弃用）
+            import warnings
+            warnings.warn(
+                "Support for 2D single-channel images is deprecated. "
+                "Please regenerate images using the current version which produces 3D arrays with shape (n_rows, period, 2).",
+                DeprecationWarning,
+                stacklevel=2
+            )
             data = image.flatten()
             # 反归一化
             data = data * (norm_max - norm_min) + norm_min
@@ -362,15 +369,21 @@ class DataProcessor:
             n_rows, period, n_features = image.shape
             
             # 检查是否是单特征图像（有2个通道，第二个通道全为1）
-            if n_features == 2 and np.allclose(image[:, :, 1], 1.0):
-                # 单特征图像，只使用第一个通道
-                data = image[:, :, 0].flatten()
-                # 反归一化
-                data = data * (norm_max - norm_min) + norm_min
-                return data
-            else:
-                # 真正的多特征图像
-                data = image.reshape(-1, n_features)
-                # 反归一化
-                data = data * (norm_max - norm_min) + norm_min
-                return data
+            # 使用快速检查：只检查第二通道的第一个和最后一个值，以及平均值
+            if n_features == 2:
+                second_channel = image[:, :, 1]
+                # 快速检查：检查最小值、最大值和平均值是否都接近1
+                if (abs(second_channel.min() - 1.0) < 1e-6 and 
+                    abs(second_channel.max() - 1.0) < 1e-6 and 
+                    abs(second_channel.mean() - 1.0) < 1e-6):
+                    # 单特征图像，只使用第一个通道
+                    data = image[:, :, 0].flatten()
+                    # 反归一化
+                    data = data * (norm_max - norm_min) + norm_min
+                    return data
+            
+            # 真正的多特征图像
+            data = image.reshape(-1, n_features)
+            # 反归一化
+            data = data * (norm_max - norm_min) + norm_min
+            return data

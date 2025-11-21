@@ -4,6 +4,7 @@ Data Processing Module for Time Series
 时序数据处理模块，包括滤波、分解、时序数据转图像等功能
 """
 
+import warnings
 import numpy as np
 from typing import Optional, Tuple, Dict, Union
 from scipy import signal
@@ -340,7 +341,6 @@ class DataProcessor:
         """
         if image.ndim == 2:
             # 兼容旧格式的单特征图像
-            import warnings
             warnings.warn(
                 "2D image format is deprecated. Please use 3D format with shape (n_rows, period, n_features).",
                 DeprecationWarning,

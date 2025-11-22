@@ -226,7 +226,6 @@ print(f"DLinear model: {dlinear_info['model_type']}, seq_len={dlinear_info['seq_
 transformer_info = transformer.get_model_info()
 print(f"Transformer model: {transformer_info['model_type']}, d_model={transformer_info['d_model']}")
 ```
-```
 
 ## 完整示例 / Complete Example
 

@@ -358,7 +358,20 @@ class TestTransformerLoader:
         assert pe.shape == (100, 512)
         # Check that encoding has correct periodic properties
         assert not np.allclose(pe[0], pe[1])
-        assert np.allclose(pe[0, 0::2], np.sin(0 * np.exp(np.arange(0, 512, 2) * -(np.log(10000.0) / 512))))
+        
+        # Verify first position encoding
+        position = 0
+        div_term = np.exp(np.arange(0, 512, 2) * -(np.log(10000.0) / 512))
+        expected_sin = np.sin(position * div_term)
+        expected_cos = np.cos(position * div_term)
+        
+        # For position 0, sin(0) = 0 and cos(0) = 1
+        assert np.allclose(pe[0, 0::2], expected_sin)
+        assert np.allclose(pe[0, 1::2], expected_cos)
+        
+        # Test with odd d_model
+        pe_odd = loader._positional_encoding(length=100, d_model=513)
+        assert pe_odd.shape == (100, 513)
     
     def test_predict_with_projection(self):
         """测试使用投影层预测"""

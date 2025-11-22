@@ -434,8 +434,13 @@ class TransformerLoader:
         position = np.arange(0, length).reshape(-1, 1)
         div_term = np.exp(np.arange(0, d_model, 2) * -(np.log(10000.0) / d_model))
         
+        # Assign sine to even indices
         pe[:, 0::2] = np.sin(position * div_term)
-        pe[:, 1::2] = np.cos(position * div_term)
+        
+        # Assign cosine to odd indices
+        # When d_model is odd, there are fewer odd indices than div_term elements
+        n_cos_positions = (d_model - 1) // 2 + (d_model % 2 == 0)
+        pe[:, 1::2] = np.cos(position * div_term[:n_cos_positions])
         
         return pe
     

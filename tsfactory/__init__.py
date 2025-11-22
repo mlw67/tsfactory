@@ -16,6 +16,7 @@ from .core.model_identification import ModelIdentifier
 from .models.missing_imputation import MissingValueImputer
 from .models.anomaly_detection import AnomalyDetector
 from .models.sequence_prediction import SequencePredictor
+from .models.deep_learning import DLinearLoader, TransformerLoader
 
 __all__ = [
     "TimeSeriesLoader",
@@ -26,4 +27,6 @@ __all__ = [
     "MissingValueImputer",
     "AnomalyDetector",
     "SequencePredictor",
+    "DLinearLoader",
+    "TransformerLoader",
 ]

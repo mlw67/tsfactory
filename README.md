@@ -18,6 +18,7 @@ TSFactory is a comprehensive time series analysis framework that includes variou
 - **缺失值填充 / Missing Value Imputation**: 多种插值方法（线性、样条、前向/后向填充等）
 - **异常检测 / Anomaly Detection**: Z-score、IQR、孤立森林、移动平均等方法
 - **序列预测 / Sequence Prediction**: AR、线性回归、多项式回归等模型
+- **深度学习模型 / Deep Learning Models**: DLinear、Transformer编码解码器等深度学习模型加载器
 - **多维支持 / Multi-dimensional Support**: 支持单维度和多维度输入/输出
 
 ## 安装 / Installation
@@ -167,6 +168,63 @@ predictor.fit(train_data)
 X_test, y_test = predictor._prepare_autoregressive_data(test_data, 3)
 metrics = predictor.evaluate(X_test, y_test)
 print(f"RMSE: {metrics['rmse']}")
+```
+
+### 9. 深度学习模型 / Deep Learning Models
+
+```python
+from tsfactory import DLinearLoader, TransformerLoader
+import numpy as np
+
+# DLinear模型加载和使用
+dlinear = DLinearLoader(seq_len=96, pred_len=24, enc_in=1)
+
+# 从文件加载预训练模型
+# dlinear.load_from_file('dlinear_model.pth')
+
+# 或者从字典加载模型权重
+state_dict = {
+    'seasonal_Linear.weight': np.random.randn(24, 96),
+    'seasonal_Linear.bias': np.random.randn(24),
+    'trend_Linear.weight': np.random.randn(24, 96),
+    'trend_Linear.bias': np.random.randn(24)
+}
+dlinear.load_from_dict(state_dict)
+
+# 进行预测
+input_data = np.random.randn(96)  # 输入序列
+predictions = dlinear.predict(input_data)  # 预测未来24步
+print(f"DLinear predictions shape: {predictions.shape}")
+
+# Transformer模型加载和使用
+transformer = TransformerLoader(
+    seq_len=96, 
+    pred_len=24, 
+    d_model=512, 
+    n_heads=8
+)
+
+# 从文件加载预训练模型
+# transformer.load_from_file('transformer_model.pth')
+
+# 或者从字典加载模型权重
+state_dict = {
+    'encoder.layer0.weight': np.random.randn(512, 512),
+    'decoder.layer0.weight': np.random.randn(512, 512),
+    'projection.weight': np.random.randn(24, 96),
+}
+transformer.load_from_dict(state_dict)
+
+# 进行预测
+predictions = transformer.predict(input_data)
+print(f"Transformer predictions shape: {predictions.shape}")
+
+# 查看模型信息
+dlinear_info = dlinear.get_model_info()
+print(f"DLinear model: {dlinear_info['model_type']}, seq_len={dlinear_info['seq_len']}")
+
+transformer_info = transformer.get_model_info()
+print(f"Transformer model: {transformer_info['model_type']}, d_model={transformer_info['d_model']}")
 ```
 
 ## 完整示例 / Complete Example

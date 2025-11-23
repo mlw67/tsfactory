@@ -8,22 +8,45 @@ TSFactory - A Time Series Analysis Framework
 
 __version__ = "0.1.0"
 
+# Core modules
 from .core.data_loader import TimeSeriesLoader
 from .core.data_processor import DataProcessor
 from .core.statistical_analysis import StatisticalAnalyzer
 from .core.hypothesis_testing import HypothesisTester
 from .core.model_identification import ModelIdentifier
-from .models.missing_imputation import MissingValueImputer
-from .models.anomaly_detection import AnomalyDetector
-from .models.sequence_prediction import SequencePredictor
+from .core.dl_data_loader import DLinearDataLoader, TransformerDataLoader
+
+# Statistical models
+from .models.statistical import MissingValueImputer, AnomalyDetector
+
+# Machine learning models
+from .models.machine_learning import SequencePredictor
+
+# Deep learning models
+from .models.deep_learning import DLinearForecaster, TransformerForecaster
+
+# For backward compatibility
+DLinearLoader = DLinearForecaster
+TransformerLoader = TransformerForecaster
 
 __all__ = [
+    # Core
     "TimeSeriesLoader",
     "DataProcessor",
     "StatisticalAnalyzer",
     "HypothesisTester",
     "ModelIdentifier",
+    "DLinearDataLoader",
+    "TransformerDataLoader",
+    # Statistical models
     "MissingValueImputer",
     "AnomalyDetector",
+    # Machine learning models
     "SequencePredictor",
+    # Deep learning models
+    "DLinearForecaster",
+    "TransformerForecaster",
+    # Backward compatibility aliases
+    "DLinearLoader",
+    "TransformerLoader",
 ]

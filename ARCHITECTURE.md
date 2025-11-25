@@ -20,9 +20,18 @@ tsfactory/
 │   ├── base_models/              # 基础模型 / Base models
 │   │   ├── layers/               # 共享层 / Shared layers
 │   │   │   ├── series_decomp.py  # 时序分解层 / Series decomposition
-│   │   │   └── positional_encoding.py  # 位置编码 / Positional encoding
+│   │   │   ├── positional_encoding.py  # 位置编码 / Positional encoding
+│   │   │   ├── autocorrelation.py      # 自相关层 / Autocorrelation
+│   │   │   ├── embedding.py            # 嵌入层 / Embedding layers
+│   │   │   ├── attention.py            # 注意力层 / Attention layers
+│   │   │   ├── feedforward.py          # 前馈网络层 / Feed-forward layers
+│   │   │   └── normalization.py        # 归一化层 / Normalization layers
 │   │   ├── dlinear.py            # DLinear基础模型 / DLinear base model
-│   │   └── transformer.py        # Transformer基础模型 / Transformer base model
+│   │   ├── nlinear.py            # NLinear基础模型 / NLinear base model
+│   │   ├── transformer.py        # Transformer基础模型 / Transformer base model
+│   │   ├── autoformer.py         # Autoformer基础模型 / Autoformer base model
+│   │   ├── timexer.py            # TimeXer基础模型 / TimeXer base model
+│   │   └── timemixer.py          # TimeMixer基础模型 / TimeMixer base model
 │   │
 │   ├── statistical/              # 统计模型 / Statistical models
 │   │   ├── anomaly_detection.py  # 异常检测 / Anomaly detection
@@ -32,9 +41,21 @@ tsfactory/
 │   │   └── sequence_prediction.py # 序列预测 / Sequence prediction
 │   │
 │   └── deep_learning/            # 深度学习模型 / Deep learning models
-│       └── forecasting.py        # 预测模型 / Forecasting models
-│           ├── DLinearForecaster
-│           └── TransformerForecaster
+│       ├── forecasting.py        # 预测模型 / Forecasting models
+│       │   ├── DLinearForecaster
+│       │   └── TransformerForecaster
+│       ├── parameter_prediction.py  # 参数预测（短期预测）/ Parameter prediction
+│       │   ├── NLinearForecaster
+│       │   ├── AutoformerForecaster
+│       │   ├── TimeXerForecaster
+│       │   ├── TimeMixerForecaster
+│       │   └── ShortTermPredictor
+│       ├── anomaly_detection.py  # 深度学习异常检测 / DL Anomaly detection
+│       │   ├── PointAnomalyDetector    # 点分类 / Point classification
+│       │   └── IntervalAnomalyDetector # 区间分类 / Interval classification
+│       └── fault_diagnosis.py    # 故障诊断（样本分类）/ Fault diagnosis
+│           ├── FaultDiagnosisClassifier
+│           └── MultiFaultDiagnosisClassifier
 │
 └── tests/                        # 测试 / Tests
 ```
@@ -66,11 +87,34 @@ Base models in `models/base_models/` provide core deep learning architectures:
 - 线性预测层 / Linear prediction layers
 - 使用 SeriesDecomp 层 / Uses SeriesDecomp layer
 
+#### NLinearBaseModel
+- 最后值归一化方案 / Last-value normalization scheme
+- 处理分布偏移 / Handles distribution shift
+- 简单线性层 / Simple linear layer
+
 #### TransformerBaseModel
 - 编码器-解码器架构 / Encoder-decoder architecture
 - 多头注意力机制 / Multi-head attention
 - 位置编码 / Positional encoding
 - 使用 PositionalEncoding 层 / Uses PositionalEncoding layer
+
+#### AutoformerBaseModel
+- 自相关机制 / Auto-correlation mechanism
+- 逐步分解架构 / Progressive decomposition
+- 编码器-解码器结构 / Encoder-decoder structure
+- 使用 AutoCorrelation 和 SeriesDecomp 层
+
+#### TimeXerBaseModel
+- Patch嵌入 / Patch embedding
+- 外生变量支持 / Exogenous variable support
+- 交叉注意力机制 / Cross-attention mechanism
+- 使用 PatchEmbedding 和 FullAttention 层
+
+#### TimeMixerBaseModel
+- 多尺度混合 / Multi-scale mixing
+- 季节-趋势分解 / Seasonal-trend decomposition
+- RevIN归一化 / RevIN normalization
+- 使用 SeriesDecomp 和 RevIN 层
 
 ### 3. 共享层 (Shared Layers)
 
@@ -80,8 +124,64 @@ Shared layers in `models/base_models/layers/` are used by multiple base models:
 
 - `SeriesDecomp`: 时序分解层，使用移动平均提取趋势 / Decomposes time series using moving average
 - `PositionalEncoding`: 为 Transformer 生成位置编码 / Generates positional encodings for Transformers
+- `AutoCorrelation`: 自相关层，用于 Autoformer / Auto-correlation layer for Autoformer
+- `TokenEmbedding`: Token嵌入层 / Token embedding layer
+- `PositionalEmbedding`: 位置嵌入层 / Positional embedding layer
+- `TemporalEmbedding`: 时间嵌入层 / Temporal embedding layer
+- `DataEmbedding`: 数据嵌入层 / Data embedding layer
+- `PatchEmbedding`: Patch嵌入层 / Patch embedding layer
+- `FullAttention`: 全注意力层 / Full attention layer
+- `ProbAttention`: 稀疏注意力层 / Sparse attention layer
+- `CrossAttention`: 交叉注意力层 / Cross-attention layer
+- `FeedForward`: 前馈网络层 / Feed-forward layer
+- `LayerNorm`: 层归一化 / Layer normalization
+- `RevIN`: 可逆实例归一化 / Reversible instance normalization
+- `BatchNorm1d`: 批归一化 / Batch normalization
+- `RMSNorm`: RMS归一化 / RMS normalization
 
 ### 4. 任务特定模型 (Task-Specific Models)
+
+#### 任务头结构 (Task Head Structure)
+
+不同任务使用不同的预测头结构，参考 Time-Series-Library 实现：
+
+Different tasks use different prediction head structures, following Time-Series-Library:
+
+```python
+# 长期预测/短期预测 (Long-term/Short-term Forecast)
+self.projection = nn.Linear(configs.d_model, configs.pred_len, bias=True)
+
+# 缺失值填充 (Imputation)
+self.projection = nn.Linear(configs.d_model, configs.seq_len, bias=True)
+
+# 异常检测 (Anomaly Detection)
+self.projection = nn.Linear(configs.d_model, configs.seq_len, bias=True)
+
+# 分类 (Classification)
+self.act = F.gelu
+self.dropout = nn.Dropout(configs.dropout)
+self.projection = nn.Linear(configs.d_model * configs.enc_in, configs.num_class)
+```
+
+可用的任务头类 / Available task head classes:
+- `ForecastHead`: 预测头 Linear(d_model, pred_len)
+- `ImputationHead`: 填充头 Linear(d_model, seq_len)
+- `AnomalyDetectionHead`: 异常检测头 Linear(d_model, seq_len)
+- `ClassificationHead`: 分类头 GELU + Dropout + Linear(d_model * enc_in, num_class)
+
+使用 `create_task_head()` 工厂函数创建任务头：
+
+```python
+from tsfactory import create_task_head, TASK_CLASSIFICATION
+
+head = create_task_head(
+    TASK_CLASSIFICATION,
+    d_model=64,
+    enc_in=1,
+    num_class=5,
+    dropout=0.1
+)
+```
 
 #### 深度学习模型 (Deep Learning Models)
 
@@ -89,14 +189,31 @@ Shared layers in `models/base_models/layers/` are used by multiple base models:
 
 In `models/deep_learning/`, inherit from base models and add task-specific functionality:
 
+**预测模型 (Forecasting Models) - 参数预测/短期预测:**
 - `DLinearForecaster`: 基于 DLinearBaseModel 的预测模型 / Forecasting model based on DLinearBaseModel
 - `TransformerForecaster`: 基于 TransformerBaseModel 的预测模型 / Forecasting model based on TransformerBaseModel
+- `NLinearForecaster`: 基于 NLinearBaseModel 的预测模型 / Forecasting model based on NLinearBaseModel
+- `AutoformerForecaster`: 基于 AutoformerBaseModel 的预测模型 / Forecasting model based on AutoformerBaseModel
+- `TimeXerForecaster`: 基于 TimeXerBaseModel 的预测模型 / Forecasting model based on TimeXerBaseModel
+- `TimeMixerForecaster`: 基于 TimeMixerBaseModel 的预测模型 / Forecasting model based on TimeMixerBaseModel
+- `ShortTermPredictor`: 统一的短期预测接口 / Unified short-term prediction interface
 
-这些模型：
-These models:
+**异常检测模型 (Anomaly Detection Models) - 点分类/区间分类:**
+- `PointAnomalyDetector`: 点级别异常检测（点分类）/ Point-level anomaly detection (point classification)
+- `IntervalAnomalyDetector`: 区间级别异常检测（区间分类）/ Interval-level anomaly detection (interval classification)
+
+**故障诊断模型 (Fault Diagnosis Models) - 样本分类:**
+- `FaultDiagnosisClassifier`: 单标签故障分类，使用 GELU + Dropout 结构 / Single-label fault classification with GELU + Dropout
+- `MultiFaultDiagnosisClassifier`: 多标签故障分类 / Multi-label fault classification
+
+这些模型支持:
+These models support:
 - 继承基础模型的架构 / Inherit base model architecture
-- 添加预测任务的头部 / Add task-specific heads for forecasting
-- 提供简化的预测接口 / Provide simplified prediction interface
+- 添加任务特定的头部 / Add task-specific heads
+- 提供简化的接口 / Provide simplified interface
+- **模型权重加载** (`load_from_dict`, `load_from_file`) / Model weight loading
+- **Head部分微调** (`fine_tune_head`) / Head-only fine-tuning
+- **整体权重重新训练** (`train_full`) / Full model training
 
 #### 统计模型 (Statistical Models)
 
@@ -162,7 +279,11 @@ output = base_model.forward(input_data)
 ### 使用共享层 / Using Shared Layers
 
 ```python
-from tsfactory.models.base_models.layers import SeriesDecomp, PositionalEncoding
+from tsfactory.models.base_models.layers import (
+    SeriesDecomp, PositionalEncoding, AutoCorrelation,
+    TokenEmbedding, PatchEmbedding, FullAttention, 
+    RevIN, LayerNorm, FeedForward
+)
 import numpy as np
 
 # 时序分解 / Series decomposition
@@ -174,6 +295,134 @@ seasonal, trend = decomp(x)
 pe = PositionalEncoding(d_model=512)
 x = np.random.randn(1, 100, 512)
 x_with_pe = pe(x)
+
+# RevIN 归一化 / RevIN normalization
+revin = RevIN(num_features=7)
+x = np.random.randn(1, 96, 7)
+x_norm = revin(x, mode='norm')
+x_denorm = revin(x_norm, mode='denorm')
+
+# Patch 嵌入 / Patch embedding
+patch_embed = PatchEmbedding(d_model=256, patch_len=16, stride=8)
+x = np.random.randn(1, 96, 7)
+patches = patch_embed(x)
+```
+
+### 使用异常检测模型 / Using Anomaly Detection Models
+
+```python
+from tsfactory import PointAnomalyDetector, IntervalAnomalyDetector
+import numpy as np
+
+# 点异常检测 / Point anomaly detection
+detector = PointAnomalyDetector(seq_len=96, n_features=1, threshold=0.5)
+detector.load_from_dict({'encoder': {}, 'classifier': {}})
+
+x = np.random.randn(96)
+labels, scores = detector.detect(x)
+
+# 区间异常检测 / Interval anomaly detection
+interval_detector = IntervalAnomalyDetector(
+    seq_len=96, interval_len=16, n_features=1, threshold=0.5
+)
+interval_detector.load_from_dict({'feature_extractor': {}, 'classifier': {}})
+
+x = np.random.randn(96)
+labels, scores, positions = interval_detector.detect(x)
+```
+
+### 使用故障诊断模型 / Using Fault Diagnosis Models
+
+```python
+from tsfactory import FaultDiagnosisClassifier, MultiFaultDiagnosisClassifier
+import numpy as np
+
+# 故障分类 / Fault classification
+classifier = FaultDiagnosisClassifier(seq_len=96, n_classes=3, n_features=1)
+classifier.set_class_names(['Normal', 'Fault_A', 'Fault_B'])
+classifier.load_from_dict({'feature_extractor': {}, 'classifier': {}})
+
+x = np.random.randn(96)
+predictions, probabilities = classifier.predict(x)
+
+# 多故障诊断 / Multi-fault diagnosis
+multi_classifier = MultiFaultDiagnosisClassifier(
+    seq_len=96, n_faults=3, n_features=1, threshold=0.5
+)
+multi_classifier.set_fault_names(['Overheating', 'Vibration', 'Leakage'])
+multi_classifier.load_from_dict({'feature_extractor': {}, 'classifiers': {}})
+
+x = np.random.randn(96)
+predictions, probabilities = multi_classifier.predict(x)
+```
+
+### 使用短期预测模型 / Using Short-term Prediction Models
+
+```python
+from tsfactory import ShortTermPredictor, NLinearForecaster
+import numpy as np
+
+# 统一接口 / Unified interface
+predictor = ShortTermPredictor(
+    seq_len=96, pred_len=24, model_type='nlinear'
+)
+# predictor.load_from_file('model.pth')
+
+# 或使用特定模型 / Or use specific model
+nlinear = NLinearForecaster(seq_len=96, pred_len=24, enc_in=1)
+# nlinear.load_from_file('nlinear_model.pth')
+
+# 预测 / Prediction
+x = np.random.randn(96)
+# predictions = predictor.predict(x)
+```
+
+### 模型训练 / Model Training
+
+功能模型支持三种训练方式 / Functional models support three training modes:
+
+```python
+from tsfactory import FaultDiagnosisClassifier, PointAnomalyDetector
+import numpy as np
+
+# 1. 加载预训练权重 / Load pre-trained weights
+classifier = FaultDiagnosisClassifier(seq_len=96, n_classes=3, n_features=1)
+classifier.load_from_dict({'feature_extractor': {...}, 'classifier': {...}})
+
+# 2. Head部分微调（冻结特征提取器）/ Fine-tune head only (freeze feature extractor)
+X_train = np.random.randn(100, 96, 1)
+y_train = np.random.randint(0, 3, 100)
+
+classifier = FaultDiagnosisClassifier(seq_len=96, n_classes=3, n_features=1)
+# 可以先加载预训练权重再微调 / Can load pre-trained weights first
+history = classifier.fine_tune_head(
+    X_train, y_train,
+    epochs=100,
+    learning_rate=0.01,
+    batch_size=32,
+    verbose=True
+)
+
+# 3. 完整训练（包括特征提取器和Head）/ Full training (feature extractor + head)
+classifier = FaultDiagnosisClassifier(seq_len=96, n_classes=3, n_features=1)
+history = classifier.train_full(
+    X_train, y_train,
+    epochs=100,
+    learning_rate=0.01,
+    batch_size=32,
+    verbose=True
+)
+
+# 异常检测模型训练示例 / Anomaly detection training example
+detector = PointAnomalyDetector(seq_len=96, n_features=1)
+X_anomaly = np.random.randn(100, 96, 1)
+y_anomaly = (np.random.rand(100, 96) > 0.9).astype(int)  # 点级别标签 / Point-level labels
+
+# 微调Head / Fine-tune head
+history = detector.fine_tune_head(X_anomaly, y_anomaly, epochs=50)
+
+# 检测 / Detection
+labels, scores = detector.detect(X_anomaly[:1])
 ```
 
 ## 向后兼容性 / Backward Compatibility
@@ -234,7 +483,7 @@ New features can be easily added:
 
 1. **新的基础模型** / **New Base Models**:
    - 在 `models/base_models/` 中添加新的架构
-   - 例如: Informer, Autoformer, FEDformer 等
+   - 例如: Informer, FEDformer, PatchTST 等
 
 2. **新的任务** / **New Tasks**:
    - 在 `models/deep_learning/` 中添加新的任务特定模型
@@ -242,4 +491,20 @@ New features can be easily added:
 
 3. **新的共享层** / **New Shared Layers**:
    - 在 `models/base_models/layers/` 中添加新的层
-   - 例如: Attention layers, Normalization layers 等
+   - 例如: 新的注意力机制, 新的归一化层 等
+
+## 深度学习功能模型分类 / Deep Learning Task Models
+
+| 任务类型 | 模型 | 说明 |
+|---------|------|------|
+| 异常检测-点分类 | PointAnomalyDetector | 检测单个时间点的异常 |
+| 异常检测-区间分类 | IntervalAnomalyDetector | 检测时间区间的异常 |
+| 故障诊断-样本分类 | FaultDiagnosisClassifier | 单标签故障分类 |
+| 故障诊断-样本分类 | MultiFaultDiagnosisClassifier | 多标签故障分类 |
+| 参数预测-短期预测 | DLinearForecaster | DLinear预测 |
+| 参数预测-短期预测 | NLinearForecaster | NLinear预测 |
+| 参数预测-短期预测 | TransformerForecaster | Transformer预测 |
+| 参数预测-短期预测 | AutoformerForecaster | Autoformer预测 |
+| 参数预测-短期预测 | TimeXerForecaster | TimeXer预测 |
+| 参数预测-短期预测 | TimeMixerForecaster | TimeMixer预测 |
+| 参数预测-短期预测 | ShortTermPredictor | 统一预测接口 |

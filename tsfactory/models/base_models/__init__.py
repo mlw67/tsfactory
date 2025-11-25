@@ -5,9 +5,17 @@ Base Models for Time Series Deep Learning
 """
 
 from .dlinear import DLinearBaseModel
+from .nlinear import NLinearBaseModel
 from .transformer import TransformerBaseModel
+from .autoformer import AutoformerBaseModel
+from .timexer import TimeXerBaseModel
+from .timemixer import TimeMixerBaseModel
 
 __all__ = [
     "DLinearBaseModel",
+    "NLinearBaseModel",
     "TransformerBaseModel",
+    "AutoformerBaseModel",
+    "TimeXerBaseModel",
+    "TimeMixerBaseModel",
 ]

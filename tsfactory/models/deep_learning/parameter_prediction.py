@@ -16,6 +16,11 @@ from ..base_models import (
 )
 from ...core.dl_data_loader import DLinearDataLoader, TransformerDataLoader
 
+# Import forecasting models for ShortTermPredictor
+# These are imported at module level to avoid circular imports
+# forecasting.py does not import from parameter_prediction.py
+from .forecasting import DLinearForecaster, TransformerForecaster
+
 
 class NLinearForecaster:
     """
@@ -525,9 +530,6 @@ class ShortTermPredictor:
         self.pred_len = pred_len
         self.model_type = model_type
         self.enc_in = enc_in
-        
-        # Import here to avoid circular imports
-        from .forecasting import DLinearForecaster, TransformerForecaster
         
         # Create appropriate model
         if model_type == 'dlinear':

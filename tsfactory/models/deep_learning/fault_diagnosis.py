@@ -163,8 +163,8 @@ class FaultDiagnosisClassifier:
             else:
                 logits = np.zeros((batch_size, self.n_classes))
         else:
-            # Random logits as placeholder
-            logits = np.random.randn(batch_size, self.n_classes)
+            # Use uniform distribution when classifier not loaded (equal probability for all classes)
+            logits = np.zeros((batch_size, self.n_classes))
         
         # Softmax to get probabilities
         probabilities = self._softmax(logits, axis=-1)

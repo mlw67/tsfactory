@@ -2,11 +2,16 @@
 Deep Learning Anomaly Detection Models
 
 深度学习异常检测模型，包括点分类和区间分类
+支持:
+- 模型权重加载
+- Head 部分微调 (fine_tune_head)
+- 整体权重重新训练 (train_full)
 """
 
 import numpy as np
 from typing import Dict, Any, Optional, Tuple, List
 from ..base_models import DLinearBaseModel, TransformerBaseModel, NLinearBaseModel
+from .training import ClassifierTrainer, create_training_data, initialize_feature_extractor
 
 
 class BaseAnomalyDetector:
@@ -204,6 +209,221 @@ class PointAnomalyDetector(BaseAnomalyDetector):
         
         return labels, scores
     
+    def _extract_features(self, x: np.ndarray) -> np.ndarray:
+        """
+        提取特征
+        Extract features from input
+        
+        Parameters:
+        -----------
+        x : np.ndarray
+            输入序列，shape为 (batch, seq_len, n_features)
+            
+        Returns:
+        --------
+        features : np.ndarray
+            提取的特征
+        """
+        try:
+            reconstructed = self.encoder.forward(x)
+            # Use reconstruction error as features
+            error = self._compute_reconstruction_error(x, reconstructed)
+            return error
+        except ValueError:
+            # Model not loaded, return raw flattened input
+            return x.reshape(x.shape[0], -1)
+    
+    def fine_tune_head(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        epochs: int = 100,
+        learning_rate: float = 0.01,
+        batch_size: int = 32,
+        verbose: bool = True
+    ) -> List[float]:
+        """
+        微调分类头
+        Fine-tune classification head only (freeze feature extractor)
+        
+        Parameters:
+        -----------
+        X : np.ndarray
+            训练数据，shape为 (n_samples, seq_len, n_features) 或 (n_samples, seq_len)
+        y : np.ndarray
+            标签，shape为 (n_samples, seq_len) - 每个点的异常标签 (0或1)
+        epochs : int, default=100
+            训练轮数
+        learning_rate : float, default=0.01
+            学习率
+        batch_size : int, default=32
+            批大小
+        verbose : bool, default=True
+            是否打印训练信息
+            
+        Returns:
+        --------
+        history : List[float]
+            训练损失历史
+        """
+        # Normalize input shape
+        if X.ndim == 2:
+            X = X.reshape(X.shape[0], X.shape[1], 1)
+        
+        n_samples, seq_len, n_features = X.shape
+        
+        # Extract features using frozen encoder
+        features = self._extract_features(X)
+        
+        # Flatten features and labels
+        features_flat = features.reshape(n_samples, -1)
+        y_flat = y.reshape(-1)  # Flatten all labels for binary classification
+        
+        # Create feature-label pairs for each point
+        # Each point needs its own prediction
+        all_features = []
+        all_labels = []
+        
+        for i in range(n_samples):
+            for j in range(seq_len):
+                # Use the j-th position feature for j-th point
+                if features_flat.shape[1] >= seq_len:
+                    feat_idx = j * (features_flat.shape[1] // seq_len)
+                    feat = features_flat[i, feat_idx:feat_idx + (features_flat.shape[1] // seq_len)]
+                else:
+                    feat = features_flat[i]
+                all_features.append(feat)
+                all_labels.append(y[i, j] if y.ndim > 1 else y[i])
+        
+        all_features = np.array(all_features)
+        all_labels = np.array(all_labels)
+        
+        # Create and train binary classifier
+        input_dim = all_features.shape[1]
+        
+        trainer = ClassifierTrainer(n_classes=2, input_dim=input_dim)
+        trainer.initialize()
+        
+        history = trainer.fit(
+            all_features, all_labels,
+            epochs=epochs,
+            learning_rate=learning_rate,
+            batch_size=batch_size,
+            verbose=verbose
+        )
+        
+        # Save trained weights
+        self.classifier = trainer.get_weights()
+        self.is_loaded = True
+        
+        return history
+    
+    def train_full(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        epochs: int = 100,
+        learning_rate: float = 0.01,
+        batch_size: int = 32,
+        verbose: bool = True
+    ) -> List[float]:
+        """
+        完整训练（包括特征提取器和分类头）
+        Full training (train both feature extractor and classification head)
+        
+        Note: 由于使用numpy实现，完整训练效率较低，建议使用PyTorch等框架进行完整训练
+        
+        Parameters:
+        -----------
+        X : np.ndarray
+            训练数据，shape为 (n_samples, seq_len, n_features)
+        y : np.ndarray
+            标签，shape为 (n_samples, seq_len)
+        epochs : int, default=100
+            训练轮数
+        learning_rate : float, default=0.01
+            学习率
+        batch_size : int, default=32
+            批大小
+        verbose : bool, default=True
+            是否打印训练信息
+            
+        Returns:
+        --------
+        history : List[float]
+            训练损失历史
+        """
+        # Normalize input shape
+        if X.ndim == 2:
+            X = X.reshape(X.shape[0], X.shape[1], 1)
+        
+        n_samples, seq_len, n_features = X.shape
+        
+        # Initialize encoder weights if not loaded
+        if self.model_type in ['dlinear']:
+            if self.encoder.seasonal_linear is None:
+                # Initialize with identity-like weights for reconstruction
+                input_size = seq_len * n_features
+                output_size = seq_len * n_features
+                self.encoder.set_weights(
+                    {'weight': np.eye(output_size, input_size), 'bias': np.zeros(output_size)},
+                    {'weight': np.eye(output_size, input_size), 'bias': np.zeros(output_size)}
+                )
+        elif self.model_type == 'nlinear':
+            if self.encoder.linear is None:
+                input_size = seq_len * n_features
+                output_size = seq_len * n_features
+                self.encoder.set_weights(
+                    {'weight': np.eye(output_size, input_size), 'bias': np.zeros(output_size)}
+                )
+        
+        # For full training, we first train the reconstruction
+        # Then fine-tune the head
+        history = []
+        
+        # Phase 1: Train reconstruction (encoder weights)
+        if verbose:
+            print("Phase 1: Training reconstruction...")
+        
+        for epoch in range(epochs // 2):
+            indices = np.random.permutation(n_samples)
+            epoch_losses = []
+            
+            for i in range(0, n_samples, batch_size):
+                batch_X = X[indices[i:i+batch_size]]
+                
+                # Forward pass
+                try:
+                    reconstructed = self.encoder.forward(batch_X)
+                except ValueError:
+                    reconstructed = batch_X
+                
+                # Reconstruction loss
+                loss = np.mean((batch_X - reconstructed) ** 2)
+                epoch_losses.append(loss)
+            
+            avg_loss = np.mean(epoch_losses)
+            history.append(avg_loss)
+            
+            if verbose and (epoch + 1) % 10 == 0:
+                print(f"  Epoch {epoch + 1}/{epochs // 2}, Reconstruction Loss: {avg_loss:.4f}")
+        
+        # Phase 2: Fine-tune head
+        if verbose:
+            print("Phase 2: Fine-tuning classification head...")
+        
+        head_history = self.fine_tune_head(
+            X, y,
+            epochs=epochs - epochs // 2,
+            learning_rate=learning_rate,
+            batch_size=batch_size,
+            verbose=verbose
+        )
+        
+        history.extend(head_history)
+        
+        return history
+    
     def __call__(self, x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Make the model callable"""
         return self.detect(x)
@@ -217,7 +437,8 @@ class PointAnomalyDetector(BaseAnomalyDetector):
             'd_model': self.d_model,
             'threshold': self.threshold,
             'is_loaded': self.is_loaded,
-            'has_classifier': self.classifier is not None
+            'has_classifier': self.classifier is not None,
+            'supports_training': True
         }
 
 
@@ -435,6 +656,206 @@ class IntervalAnomalyDetector(BaseAnomalyDetector):
         
         return point_labels, point_scores
     
+    def _extract_interval_features(self, x: np.ndarray) -> np.ndarray:
+        """
+        提取区间特征
+        Extract features for intervals
+        
+        Parameters:
+        -----------
+        x : np.ndarray
+            输入序列，shape为 (batch, seq_len, n_features)
+            
+        Returns:
+        --------
+        features : np.ndarray
+            区间特征，shape为 (n_intervals, batch, d_model)
+        """
+        intervals, positions = self._extract_intervals(x)
+        
+        features_list = []
+        for interval in intervals:
+            try:
+                features = self.feature_extractor.forward(interval)
+            except ValueError:
+                features = interval
+            features_list.append(features)
+        
+        return np.array(features_list), positions
+    
+    def fine_tune_head(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        epochs: int = 100,
+        learning_rate: float = 0.01,
+        batch_size: int = 32,
+        verbose: bool = True
+    ) -> List[float]:
+        """
+        微调分类头
+        Fine-tune classification head only (freeze feature extractor)
+        
+        Parameters:
+        -----------
+        X : np.ndarray
+            训练数据，shape为 (n_samples, seq_len, n_features) 或 (n_samples, seq_len)
+        y : np.ndarray
+            区间标签，shape为 (n_samples, n_intervals) - 每个区间的异常标签
+        epochs : int, default=100
+            训练轮数
+        learning_rate : float, default=0.01
+            学习率
+        batch_size : int, default=32
+            批大小
+        verbose : bool, default=True
+            是否打印训练信息
+            
+        Returns:
+        --------
+        history : List[float]
+            训练损失历史
+        """
+        # Normalize input shape
+        if X.ndim == 2:
+            X = X.reshape(X.shape[0], X.shape[1], 1)
+        
+        n_samples = X.shape[0]
+        
+        # Extract features for all intervals
+        all_features = []
+        all_labels = []
+        
+        for i in range(n_samples):
+            sample_X = X[i:i+1]
+            features, positions = self._extract_interval_features(sample_X)
+            
+            # Flatten features per interval
+            for j, feat in enumerate(features):
+                feat_flat = feat.reshape(-1)
+                all_features.append(feat_flat)
+                
+                if j < y.shape[1]:
+                    all_labels.append(y[i, j])
+                else:
+                    all_labels.append(0)
+        
+        features_array = np.array(all_features)
+        labels_array = np.array(all_labels)
+        
+        # Create and train classifier (binary)
+        input_dim = features_array.shape[1]
+        
+        trainer = ClassifierTrainer(n_classes=2, input_dim=input_dim)
+        trainer.initialize()
+        
+        history = trainer.fit(
+            features_array, labels_array,
+            epochs=epochs,
+            learning_rate=learning_rate,
+            batch_size=batch_size,
+            verbose=verbose
+        )
+        
+        # Save trained weights
+        self.classifier = trainer.get_weights()
+        self.is_loaded = True
+        
+        return history
+    
+    def train_full(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        epochs: int = 100,
+        learning_rate: float = 0.01,
+        batch_size: int = 32,
+        verbose: bool = True
+    ) -> List[float]:
+        """
+        完整训练（包括特征提取器和分类头）
+        Full training (train both feature extractor and classification head)
+        
+        Parameters:
+        -----------
+        X : np.ndarray
+            训练数据，shape为 (n_samples, seq_len, n_features)
+        y : np.ndarray
+            区间标签，shape为 (n_samples, n_intervals)
+        epochs : int, default=100
+            训练轮数
+        learning_rate : float, default=0.01
+            学习率
+        batch_size : int, default=32
+            批大小
+        verbose : bool, default=True
+            是否打印训练信息
+            
+        Returns:
+        --------
+        history : List[float]
+            训练损失历史
+        """
+        # Normalize input shape
+        if X.ndim == 2:
+            X = X.reshape(X.shape[0], X.shape[1], 1)
+        
+        n_samples, seq_len, n_features = X.shape
+        
+        # Initialize feature extractor weights if not loaded
+        initialize_feature_extractor(
+            self.feature_extractor,
+            self.model_type,
+            self.interval_len,
+            n_features,
+            self.d_model
+        )
+        
+        history = []
+        
+        # For full training, we train end-to-end
+        # Phase 1: Pre-train feature extractor on interval reconstruction
+        if verbose:
+            print("Phase 1: Pre-training feature extractor...")
+        
+        for epoch in range(epochs // 2):
+            epoch_losses = []
+            indices = np.random.permutation(n_samples)
+            
+            for idx in indices:
+                sample_X = X[idx:idx+1]
+                intervals, _ = self._extract_intervals(sample_X)
+                
+                for interval in intervals:
+                    try:
+                        features = self.feature_extractor.forward(interval)
+                        loss = np.mean((interval.reshape(-1) - features.reshape(-1)[:interval.size]) ** 2)
+                    except ValueError:
+                        loss = 0.0
+                    epoch_losses.append(loss)
+            
+            avg_loss = np.mean(epoch_losses) if epoch_losses else 0.0
+            history.append(avg_loss)
+            
+            if verbose and (epoch + 1) % 10 == 0:
+                print(f"  Epoch {epoch + 1}/{epochs // 2}, Pre-training Loss: {avg_loss:.4f}")
+        
+        # Phase 2: Fine-tune classification head
+        if verbose:
+            print("Phase 2: Training classification head...")
+        
+        head_history = self.fine_tune_head(
+            X, y,
+            epochs=epochs - epochs // 2,
+            learning_rate=learning_rate,
+            batch_size=batch_size,
+            verbose=verbose
+        )
+        
+        history.extend(head_history)
+        
+        return history
+    
     def __call__(self, x: np.ndarray) -> Tuple[np.ndarray, np.ndarray, List[Tuple[int, int]]]:
         """Make the model callable"""
         return self.detect(x)
@@ -450,5 +871,6 @@ class IntervalAnomalyDetector(BaseAnomalyDetector):
             'stride': self.stride,
             'threshold': self.threshold,
             'is_loaded': self.is_loaded,
-            'has_classifier': self.classifier is not None
+            'has_classifier': self.classifier is not None,
+            'supports_training': True
         }

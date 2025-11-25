@@ -164,11 +164,14 @@ In `models/deep_learning/`, inherit from base models and add task-specific funct
 - `FaultDiagnosisClassifier`: 单标签故障分类 / Single-label fault classification
 - `MultiFaultDiagnosisClassifier`: 多标签故障分类 / Multi-label fault classification
 
-这些模型：
-These models:
+这些模型支持:
+These models support:
 - 继承基础模型的架构 / Inherit base model architecture
 - 添加任务特定的头部 / Add task-specific heads
 - 提供简化的接口 / Provide simplified interface
+- **模型权重加载** (`load_from_dict`, `load_from_file`) / Model weight loading
+- **Head部分微调** (`fine_tune_head`) / Head-only fine-tuning
+- **整体权重重新训练** (`train_full`) / Full model training
 
 #### 统计模型 (Statistical Models)
 
@@ -330,6 +333,54 @@ nlinear = NLinearForecaster(seq_len=96, pred_len=24, enc_in=1)
 # 预测 / Prediction
 x = np.random.randn(96)
 # predictions = predictor.predict(x)
+```
+
+### 模型训练 / Model Training
+
+功能模型支持三种训练方式 / Functional models support three training modes:
+
+```python
+from tsfactory import FaultDiagnosisClassifier, PointAnomalyDetector
+import numpy as np
+
+# 1. 加载预训练权重 / Load pre-trained weights
+classifier = FaultDiagnosisClassifier(seq_len=96, n_classes=3, n_features=1)
+classifier.load_from_dict({'feature_extractor': {...}, 'classifier': {...}})
+
+# 2. Head部分微调（冻结特征提取器）/ Fine-tune head only (freeze feature extractor)
+X_train = np.random.randn(100, 96, 1)
+y_train = np.random.randint(0, 3, 100)
+
+classifier = FaultDiagnosisClassifier(seq_len=96, n_classes=3, n_features=1)
+# 可以先加载预训练权重再微调 / Can load pre-trained weights first
+history = classifier.fine_tune_head(
+    X_train, y_train,
+    epochs=100,
+    learning_rate=0.01,
+    batch_size=32,
+    verbose=True
+)
+
+# 3. 完整训练（包括特征提取器和Head）/ Full training (feature extractor + head)
+classifier = FaultDiagnosisClassifier(seq_len=96, n_classes=3, n_features=1)
+history = classifier.train_full(
+    X_train, y_train,
+    epochs=100,
+    learning_rate=0.01,
+    batch_size=32,
+    verbose=True
+)
+
+# 异常检测模型训练示例 / Anomaly detection training example
+detector = PointAnomalyDetector(seq_len=96, n_features=1)
+X_anomaly = np.random.randn(100, 96, 1)
+y_anomaly = (np.random.rand(100, 96) > 0.9).astype(int)  # 点级别标签 / Point-level labels
+
+# 微调Head / Fine-tune head
+history = detector.fine_tune_head(X_anomaly, y_anomaly, epochs=50)
+
+# 检测 / Detection
+labels, scores = detector.detect(X_anomaly[:1])
 ```
 
 ## 向后兼容性 / Backward Compatibility

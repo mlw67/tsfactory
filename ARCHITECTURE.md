@@ -141,6 +141,48 @@ Shared layers in `models/base_models/layers/` are used by multiple base models:
 
 ### 4. 任务特定模型 (Task-Specific Models)
 
+#### 任务头结构 (Task Head Structure)
+
+不同任务使用不同的预测头结构，参考 Time-Series-Library 实现：
+
+Different tasks use different prediction head structures, following Time-Series-Library:
+
+```python
+# 长期预测/短期预测 (Long-term/Short-term Forecast)
+self.projection = nn.Linear(configs.d_model, configs.pred_len, bias=True)
+
+# 缺失值填充 (Imputation)
+self.projection = nn.Linear(configs.d_model, configs.seq_len, bias=True)
+
+# 异常检测 (Anomaly Detection)
+self.projection = nn.Linear(configs.d_model, configs.seq_len, bias=True)
+
+# 分类 (Classification)
+self.act = F.gelu
+self.dropout = nn.Dropout(configs.dropout)
+self.projection = nn.Linear(configs.d_model * configs.enc_in, configs.num_class)
+```
+
+可用的任务头类 / Available task head classes:
+- `ForecastHead`: 预测头 Linear(d_model, pred_len)
+- `ImputationHead`: 填充头 Linear(d_model, seq_len)
+- `AnomalyDetectionHead`: 异常检测头 Linear(d_model, seq_len)
+- `ClassificationHead`: 分类头 GELU + Dropout + Linear(d_model * enc_in, num_class)
+
+使用 `create_task_head()` 工厂函数创建任务头：
+
+```python
+from tsfactory import create_task_head, TASK_CLASSIFICATION
+
+head = create_task_head(
+    TASK_CLASSIFICATION,
+    d_model=64,
+    enc_in=1,
+    num_class=5,
+    dropout=0.1
+)
+```
+
 #### 深度学习模型 (Deep Learning Models)
 
 位于 `models/deep_learning/`，继承自基础模型并添加任务特定的功能：
@@ -161,7 +203,7 @@ In `models/deep_learning/`, inherit from base models and add task-specific funct
 - `IntervalAnomalyDetector`: 区间级别异常检测（区间分类）/ Interval-level anomaly detection (interval classification)
 
 **故障诊断模型 (Fault Diagnosis Models) - 样本分类:**
-- `FaultDiagnosisClassifier`: 单标签故障分类 / Single-label fault classification
+- `FaultDiagnosisClassifier`: 单标签故障分类，使用 GELU + Dropout 结构 / Single-label fault classification with GELU + Dropout
 - `MultiFaultDiagnosisClassifier`: 多标签故障分类 / Multi-label fault classification
 
 这些模型支持:

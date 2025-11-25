@@ -6,12 +6,18 @@ Deep Learning Fault Diagnosis Models
 - 模型权重加载
 - Head 部分微调 (fine_tune_head)
 - 整体权重重新训练 (train_full)
+
+分类头结构参考 Time-Series-Library:
+    self.act = F.gelu
+    self.dropout = nn.Dropout(configs.dropout)
+    self.projection = nn.Linear(configs.d_model * configs.enc_in, configs.num_class)
 """
 
 import numpy as np
 from typing import Dict, Any, Optional, Tuple, List
 from ..base_models import DLinearBaseModel, TransformerBaseModel, NLinearBaseModel
 from .training import ClassifierTrainer, create_training_data, initialize_feature_extractor
+from .task_heads import ClassificationHead, gelu, dropout
 
 
 class FaultDiagnosisClassifier:
@@ -20,6 +26,9 @@ class FaultDiagnosisClassifier:
     
     Sample-level classifier for fault diagnosis using time series data.
     Classifies entire sequences into different fault categories.
+    
+    Classification head structure (Time-Series-Library reference):
+        GELU activation + Dropout + Linear(d_model * enc_in, num_class)
     """
     
     def __init__(
@@ -28,7 +37,8 @@ class FaultDiagnosisClassifier:
         n_features: int = 1,
         n_classes: int = 2,
         d_model: int = 64,
-        model_type: str = 'dlinear'
+        model_type: str = 'dlinear',
+        dropout_rate: float = 0.1
     ):
         """
         Parameters:
@@ -37,35 +47,55 @@ class FaultDiagnosisClassifier:
             输入序列长度 / Input sequence length
         n_features : int, default=1
             输入特征数 / Number of input features
+            对应 Time-Series-Library 中的 enc_in
         n_classes : int, default=2
             分类类别数 / Number of classes
+            对应 Time-Series-Library 中的 num_class
         d_model : int, default=64
             模型维度 / Model dimension
         model_type : str, default='dlinear'
             基础模型类型 ('dlinear', 'nlinear', 'transformer')
+        dropout_rate : float, default=0.1
+            Dropout 比率 (用于分类头)
         """
         self.seq_len = seq_len
-        self.n_features = n_features
+        self.n_features = max(n_features, 1)  # Ensure at least 1 feature
         self.n_classes = n_classes
         self.d_model = d_model
         self.model_type = model_type
+        self.dropout_rate = dropout_rate
         self.is_loaded = False
+        self.training = False
         
         # Feature extractor
         if model_type == 'dlinear':
-            self.feature_extractor = DLinearBaseModel(seq_len, d_model, n_features)
+            self.feature_extractor = DLinearBaseModel(seq_len, d_model, self.n_features)
         elif model_type == 'nlinear':
-            self.feature_extractor = NLinearBaseModel(seq_len, d_model, n_features)
+            self.feature_extractor = NLinearBaseModel(seq_len, d_model, self.n_features)
         else:
             self.feature_extractor = TransformerBaseModel(
-                seq_len, d_model, d_model=d_model, enc_in=n_features
+                seq_len, d_model, d_model=d_model, enc_in=self.n_features
             )
         
-        # Classification head
+        # Classification head: Linear(d_model * n_features, n_classes)
+        # Will be initialized with proper input dimension after feature extraction
         self.classifier = None
+        self.classification_head = None
         
         # Class names (optional)
         self.class_names = None
+    
+    def train(self):
+        """设置为训练模式"""
+        self.training = True
+        if self.classification_head is not None:
+            self.classification_head.train()
+    
+    def eval(self):
+        """设置为评估模式"""
+        self.training = False
+        if self.classification_head is not None:
+            self.classification_head.eval()
     
     def set_class_names(self, class_names: List[str]):
         """设置类别名称"""
@@ -95,8 +125,24 @@ class FaultDiagnosisClassifier:
             proj_weights = extractor_weights.get('projection')
             self.feature_extractor.set_weights(enc_weights, dec_weights, proj_weights)
         
-        # Load classifier
+        # Load classifier weights
         self.classifier = state_dict.get('classifier')
+        
+        # Initialize ClassificationHead if classifier weights are available
+        if self.classifier is not None:
+            weight = self.classifier.get('weight')
+            if weight is not None:
+                # Infer input dimension from weight shape
+                input_dim = weight.shape[1]
+                # Safe division: use max(n_features, 1) to prevent division by zero
+                effective_n_features = max(self.n_features, 1)
+                self.classification_head = ClassificationHead(
+                    d_model=input_dim // effective_n_features,
+                    enc_in=effective_n_features,
+                    num_class=self.n_classes,
+                    dropout_rate=self.dropout_rate
+                )
+                self.classification_head.load_weights(weight, self.classifier.get('bias'))
         
         # Load class names
         self.class_names = state_dict.get('class_names')
@@ -114,6 +160,11 @@ class FaultDiagnosisClassifier:
         """
         预测故障类型
         Predict fault type
+        
+        Classification head structure (Time-Series-Library reference):
+            output = GELU(features)
+            output = Dropout(output)
+            logits = Linear(output)  # Linear(d_model * enc_in, num_class)
         
         Parameters:
         -----------
@@ -143,18 +194,20 @@ class FaultDiagnosisClassifier:
             # Model not loaded, use raw features
             features = x
         
-        # Flatten features
+        # Flatten features to (batch, d_model * enc_in)
         features_flat = features.reshape(batch_size, -1)
         
-        # Apply classifier
-        if self.classifier is not None:
+        # Apply classification head: GELU + Dropout + Linear
+        if self.classification_head is not None:
+            # Use ClassificationHead which includes GELU and Dropout
+            logits = self.classification_head.forward(features_flat)
+        elif self.classifier is not None:
             weight = self.classifier.get('weight')
             bias = self.classifier.get('bias')
             
             if weight is not None:
                 # Adjust weight dimensions if needed
                 if weight.shape[1] != features_flat.shape[1]:
-                    # Truncate or pad features
                     if features_flat.shape[1] > weight.shape[1]:
                         features_flat = features_flat[:, :weight.shape[1]]
                     else:
@@ -162,6 +215,13 @@ class FaultDiagnosisClassifier:
                         padded[:, :features_flat.shape[1]] = features_flat
                         features_flat = padded
                 
+                # Apply GELU activation (Time-Series-Library reference)
+                features_flat = gelu(features_flat)
+                
+                # Apply dropout (only in training mode)
+                features_flat = dropout(features_flat, self.dropout_rate, self.training)
+                
+                # Linear projection
                 logits = features_flat @ weight.T
                 if bias is not None:
                     logits = logits + bias
